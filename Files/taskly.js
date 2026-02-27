@@ -11,8 +11,8 @@
 
     let state = {
         tasks: GM_getValue("savedTasks", []),
-        skippedTitles: GM_getValue("skippedTitles", []),
-        maxSkips: 3,
+        skippedTitles: GM_getValue("skippedTitles", []), // Persistent skip list
+        maxSkips: 3, // Set skip limit to 3
         view: 'list',
         searchQuery: "",
         accentColor: GM_getValue("accentColor", "#0267f0"),
@@ -82,10 +82,19 @@
         const items = document.querySelectorAll(".c-calendar-list-accordion__item__content__item");
         if (items.length > 0) {
             const allTasks = Array.from(items).map(analyzeTask).sort((a,b) => a.difficulty - b.difficulty);
+            
+            // Filter tasks based on skip list
             let filtered = allTasks.filter(t => !state.skippedTitles.includes(t.title));
-            if (filtered.length === 0 && allTasks.length > 0) { filtered = allTasks; }
+
+            // FALLBACK: If everything left is skipped, show them anyway
+            if (filtered.length === 0 && allTasks.length > 0) {
+                filtered = allTasks;
+            }
+
             if (JSON.stringify(filtered) !== JSON.stringify(state.tasks)) {
-                if (state.notifs && filtered.length > 0) { showNotification(filtered[0]); }
+                if (state.notifs && filtered.length > 0) {
+                    showNotification(filtered[0]);
+                }
                 state.tasks = filtered;
                 GM_setValue("savedTasks", filtered);
                 if(document.getElementById('t-bg')) render();
@@ -97,28 +106,34 @@
         if (!t || document.getElementById("taskly-notification")) return;
         const n = document.createElement('div');
         n.id = "taskly-notification";
-        const canSkip = state.skippedTitles.length < state.maxSkips;
-        const skipBtn = canSkip ? `<button id="notif-skip" class="t-btn t-btn-sec">Skip (${state.skippedTitles.length}/${state.maxSkips})</button>` : '';
+        
+        const canSkip = state.skippedTitles.length < state.maxSkips; // Max 3 check
+        const skipBtn = canSkip ? `<button id="notif-skip" class="t-btn t-btn-sec" style="flex: 1;">Skip (${state.skippedTitles.length}/${state.maxSkips})</button>` : '';
 
+        // UI Fix: Flex row with locked height title
         n.innerHTML = `
             <div style="font-size:10px; font-weight:900; color:#4bb543; margin-bottom:5px; text-transform: uppercase;">Easiest Task Detected</div>
-            <div style="font-weight:700; margin-bottom:15px; line-height:1.4; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.title}</div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
-                <a href="${t.link}" class="t-btn" style="background:#4bb543;">Do it now</a>
-                <button id="notif-dash" class="t-btn t-btn-sec">Dashboard</button>
+            <div style="font-weight:700; margin-bottom:16px; line-height:1.3; font-size: 13px; height: 36px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${t.title}</div>
+            <div style="display:flex; gap:8px; justify-content: space-between;">
+                <a href="${t.link}" class="t-btn" style="background:#4bb543; flex: 1.2;">Do it now</a>
+                <button id="notif-dash" class="t-btn t-btn-sec" style="flex: 1;">Dashboard</button>
                 ${skipBtn}
             </div>`;
+            
         document.documentElement.appendChild(n);
+        
         document.getElementById('notif-dash').onclick = (e) => { e.stopPropagation(); n.remove(); showOverlay(); };
+        
         if (canSkip) {
             document.getElementById('notif-skip').onclick = (e) => {
                 e.stopPropagation();
                 state.skippedTitles.push(t.title);
                 GM_setValue("skippedTitles", state.skippedTitles);
                 n.remove();
-                shadowScan();
+                shadowScan(); // Re-scan to update state
             };
         }
+
         if (state.autoDismiss) setTimeout(() => n?.remove(), 8000);
     }
 
@@ -130,6 +145,8 @@
         document.documentElement.appendChild(bg);
         document.getElementById('t-close').onclick = () => bg.remove();
         document.getElementById('v-list').onclick = () => { state.view = 'list'; render(); };
+        
+        // Clear Skips button
         document.getElementById('v-set').onclick = () => { 
             state.skippedTitles = []; 
             GM_setValue("skippedTitles", []); 
@@ -143,15 +160,18 @@
         const wrap = document.getElementById('t-wrap');
         if (!wrap) return;
         wrap.innerHTML = "";
+        
         const search = document.createElement('input');
         search.className = "t-input"; search.placeholder = "Filter easiest tasks..."; search.value = state.searchQuery;
         search.oninput = (e) => { state.searchQuery = e.target.value; updateList(listCont); };
         const listCont = document.createElement('div');
         wrap.appendChild(search);
+        
         const skipStatus = document.createElement('div');
         skipStatus.style = "font-size: 11px; opacity: 0.7; margin-bottom: 10px;";
         skipStatus.innerText = `Skips used: ${state.skippedTitles.length} / ${state.maxSkips}`;
         wrap.appendChild(skipStatus);
+
         wrap.appendChild(listCont);
         updateList(listCont);
     }
@@ -163,6 +183,7 @@
         filtered.slice(state.currentPage * state.tpp, (state.currentPage + 1) * state.tpp).forEach((t, i) => {
             const isFirst = i === 0 && state.searchQuery === "";
             const isCurrentlySkipped = state.skippedTitles.includes(t.title);
+            
             const card = document.createElement('div');
             card.className = `t-card ${isFirst ? 'easiest' : ''}`;
             card.innerHTML = `
