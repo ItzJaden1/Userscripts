@@ -11,7 +11,7 @@
 
     let state = {
         tasks: GM_getValue("savedTasks", []),
-        skippedTitles: GM_getValue("skippedTitles", []), // Persistent skip list
+        skippedTitles: GM_getValue("skippedTitles", []),
         maxSkips: 3,
         view: 'list',
         searchQuery: "",
@@ -51,15 +51,15 @@
         style.id = "taskly-styles";
         style.innerHTML = `
             :root { --t-accent: ${state.accentColor}; --t-bg: ${theme.bg}; --t-card: ${theme.card}; --t-text: ${theme.text}; --t-border: ${theme.border}; }
-            #taskly-modal, #taskly-notification { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--t-text); }
+            #taskly-modal, #taskly-notification { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--t-text); box-sizing: border-box; }
             #t-bg { position: fixed !important; inset: 0 !important; background: rgba(0,0,0,0.5) !important; backdrop-filter: blur(8px) !important; display: flex !important; justify-content: center !important; align-items: center !important; z-index: 2147483647 !important; }
             #taskly-modal { background: var(--t-bg); width: ${state.compactMode ? '520px' : '680px'}; border-radius: 28px; padding: 32px; box-shadow: 0 40px 80px rgba(0,0,0,0.3); display: flex; flex-direction: column; animation: t-pop 0.3s ease; backdrop-filter: blur(15px); border: 1px solid var(--t-border); }
             .t-card { background: var(--t-card); border-radius: 16px; padding: 18px; margin-bottom: 12px; border: 1px solid var(--t-border); transition: 0.2s; position: relative; overflow: hidden; }
             .t-card.easiest { border-left: 4px solid #4bb543; }
-            .t-btn { background: var(--t-accent); color: #fff !important; padding: 10px 18px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; text-decoration: none !important; font-size: 12px; display: inline-flex; align-items: center; }
+            .t-btn { background: var(--t-accent); color: #fff !important; padding: 8px 12px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; text-decoration: none !important; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; height: 34px; }
             .t-btn-sec { background: rgba(120,120,120,0.15); color: var(--t-text) !important; }
             .t-input { width: 100%; background: ${theme.input}; border: 1px solid var(--t-border); padding: 12px; border-radius: 12px; color: var(--t-text); margin-bottom: 5px; outline: none; box-sizing: border-box; }
-            #taskly-notification { position: fixed; bottom: 25px; right: 25px; width: 320px; background: var(--t-bg); border-radius: 20px; padding: 20px; border-left: 5px solid #4bb543; box-shadow: 0 15px 40px rgba(0,0,0,0.2); z-index: 2147483647; cursor: pointer; animation: t-slide 0.4s ease; border-top: 1px solid var(--t-border); border-right: 1px solid var(--t-border); backdrop-filter: blur(10px); }
+            #taskly-notification { position: fixed; bottom: 25px; right: 25px; width: 360px; background: var(--t-bg); border-radius: 20px; padding: 18px; border-left: 5px solid #4bb543; box-shadow: 0 15px 40px rgba(0,0,0,0.2); z-index: 2147483647; animation: t-slide 0.4s ease; border-top: 1px solid var(--t-border); border-right: 1px solid var(--t-border); backdrop-filter: blur(10px); }
             @keyframes t-pop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
             @keyframes t-slide { from { transform: translateX(120%); } to { transform: translateX(0); } }
         `;
@@ -75,7 +75,6 @@
         let sub = "General";
         for (const s of Object.keys(tasklyDB)) { if (fullText.toLowerCase().includes(s.toLowerCase())) { sub = s; break; } }
         let difficulty = (tasklyDB[sub] || 1.5) + (days * 0.05);
-        
         return { title, sub, difficulty, link, days };
     }
 
@@ -83,19 +82,10 @@
         const items = document.querySelectorAll(".c-calendar-list-accordion__item__content__item");
         if (items.length > 0) {
             const allTasks = Array.from(items).map(analyzeTask).sort((a,b) => a.difficulty - b.difficulty);
-            
-            // Filter out specifically skipped titles
             let filtered = allTasks.filter(t => !state.skippedTitles.includes(t.title));
-
-            // FALLBACK: If everything left is skipped, show the skipped ones anyway
-            if (filtered.length === 0 && allTasks.length > 0) {
-                filtered = allTasks;
-            }
-
+            if (filtered.length === 0 && allTasks.length > 0) { filtered = allTasks; }
             if (JSON.stringify(filtered) !== JSON.stringify(state.tasks)) {
-                if (state.notifs && filtered.length > 0) {
-                    showNotification(filtered[0]);
-                }
+                if (state.notifs && filtered.length > 0) { showNotification(filtered[0]); }
                 state.tasks = filtered;
                 GM_setValue("savedTasks", filtered);
                 if(document.getElementById('t-bg')) render();
@@ -107,35 +97,28 @@
         if (!t || document.getElementById("taskly-notification")) return;
         const n = document.createElement('div');
         n.id = "taskly-notification";
-        
-        // Check if we can still skip
         const canSkip = state.skippedTitles.length < state.maxSkips;
-        const skipBtn = canSkip ? `<button id="notif-skip" class="t-btn t-btn-sec" style="margin-left:auto;">Skip (${state.skippedTitles.length}/${state.maxSkips})</button>` : '';
+        const skipBtn = canSkip ? `<button id="notif-skip" class="t-btn t-btn-sec">Skip (${state.skippedTitles.length}/${state.maxSkips})</button>` : '';
 
         n.innerHTML = `
-            <div style="font-size:10px; font-weight:900; color:#4bb543; margin-bottom:5px;">EASIEST TASK DETECTED</div>
-            <div style="font-weight:700; margin-bottom:15px; line-height:1.4;">${t.title}</div>
-            <div style="display:flex; gap:10px; align-items:center;">
+            <div style="font-size:10px; font-weight:900; color:#4bb543; margin-bottom:5px; text-transform: uppercase;">Easiest Task Detected</div>
+            <div style="font-weight:700; margin-bottom:15px; line-height:1.4; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.title}</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
                 <a href="${t.link}" class="t-btn" style="background:#4bb543;">Do it now</a>
                 <button id="notif-dash" class="t-btn t-btn-sec">Dashboard</button>
                 ${skipBtn}
             </div>`;
-            
         document.documentElement.appendChild(n);
-        
         document.getElementById('notif-dash').onclick = (e) => { e.stopPropagation(); n.remove(); showOverlay(); };
-        
-        const skipEl = document.getElementById('notif-skip');
-        if (skipEl) {
-            skipEl.onclick = (e) => {
+        if (canSkip) {
+            document.getElementById('notif-skip').onclick = (e) => {
                 e.stopPropagation();
                 state.skippedTitles.push(t.title);
                 GM_setValue("skippedTitles", state.skippedTitles);
                 n.remove();
-                shadowScan(); // Re-scan to show next easiest task
+                shadowScan();
             };
         }
-
         if (state.autoDismiss) setTimeout(() => n?.remove(), 8000);
     }
 
@@ -147,8 +130,6 @@
         document.documentElement.appendChild(bg);
         document.getElementById('t-close').onclick = () => bg.remove();
         document.getElementById('v-list').onclick = () => { state.view = 'list'; render(); };
-        
-        // Settings button is now "Clear Skips"
         document.getElementById('v-set').onclick = () => { 
             state.skippedTitles = []; 
             GM_setValue("skippedTitles", []); 
@@ -162,19 +143,15 @@
         const wrap = document.getElementById('t-wrap');
         if (!wrap) return;
         wrap.innerHTML = "";
-        
         const search = document.createElement('input');
         search.className = "t-input"; search.placeholder = "Filter easiest tasks..."; search.value = state.searchQuery;
         search.oninput = (e) => { state.searchQuery = e.target.value; updateList(listCont); };
         const listCont = document.createElement('div');
         wrap.appendChild(search);
-        
-        // Show skip count
         const skipStatus = document.createElement('div');
         skipStatus.style = "font-size: 11px; opacity: 0.7; margin-bottom: 10px;";
         skipStatus.innerText = `Skips used: ${state.skippedTitles.length} / ${state.maxSkips}`;
         wrap.appendChild(skipStatus);
-
         wrap.appendChild(listCont);
         updateList(listCont);
     }
@@ -186,7 +163,6 @@
         filtered.slice(state.currentPage * state.tpp, (state.currentPage + 1) * state.tpp).forEach((t, i) => {
             const isFirst = i === 0 && state.searchQuery === "";
             const isCurrentlySkipped = state.skippedTitles.includes(t.title);
-            
             const card = document.createElement('div');
             card.className = `t-card ${isFirst ? 'easiest' : ''}`;
             card.innerHTML = `
